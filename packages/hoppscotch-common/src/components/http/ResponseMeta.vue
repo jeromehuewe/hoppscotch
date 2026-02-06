@@ -44,6 +44,17 @@
         "
       >
         <template #body>
+          <div
+            v-if="
+              response.error &&
+              typeof response.error === 'object' &&
+              'error' in response.error &&
+              getErrorDetails(response.error.error)
+            "
+            class="mb-2 w-full overflow-auto whitespace-normal rounded bg-primaryLight px-4 py-2 font-mono text-red-400"
+          >
+            {{ getErrorDetails(response.error.error) }}
+          </div>
           <AppKernelInterceptor
             class="rounded border border-dividerLight p-2"
           />
@@ -57,6 +68,12 @@
         :text="t('helpers.network_fail')"
       >
         <template #body>
+          <div
+            v-if="response.error && getErrorDetails(response.error)"
+            class="mb-2 w-full overflow-auto whitespace-normal rounded bg-primaryLight px-4 py-2 font-mono text-red-400"
+          >
+            {{ getErrorDetails(response.error) }}
+          </div>
           <AppKernelInterceptor
             class="rounded border border-dividerLight p-2"
           />
@@ -206,6 +223,63 @@ const statusCategory = computed(() => {
 
 const inspectionService = useService(InspectionService)
 
+/**
+ * Extracts detailed error information from the error object
+ * for better debugging and user feedback
+ */
+const getErrorDetails = (error: unknown): string | null => {
+  if (!error) return null
+
+  // Handle Error instances
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`
+  }
+
+  // Handle RelayError objects
+  if (typeof error === "object" && error !== null) {
+    const relayError = error as any
+
+    // Check for kind-based errors (RelayError structure)
+    if ("kind" in relayError && "message" in relayError) {
+      let details = `[${relayError.kind.toUpperCase()}] ${relayError.message}`
+
+      // Add cause if available
+      if (relayError.cause) {
+        const causeStr =
+          typeof relayError.cause === "string"
+            ? relayError.cause
+            : relayError.cause instanceof Error
+              ? relayError.cause.message
+              : JSON.stringify(relayError.cause)
+        details += `\nCause: ${causeStr}`
+      }
+
+      // Add phase for timeout errors
+      if (relayError.kind === "timeout" && relayError.phase) {
+        details += `\nPhase: ${relayError.phase}`
+      }
+
+      return details
+    }
+
+    // Handle generic error objects with message property
+    if ("message" in relayError) {
+      return String(relayError.message)
+    }
+  }
+
+  // Fallback for other types
+  if (typeof error === "string") {
+    return error
+  }
+
+  // Last resort: stringify the error
+  try {
+    return JSON.stringify(error, null, 2)
+  } catch {
+    return String(error)
+  }
+}
 const tabResults = inspectionService.getResultViewFor(
   tabs.currentTabID.value,
   (result) => result.locations.type === "response"
